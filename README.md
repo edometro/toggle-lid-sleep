@@ -1,59 +1,45 @@
 # toggle-lid-sleep
 
-Ubuntu (systemd環境) において、ノートPCの「蓋を閉じたときのスリープ機能」をCLIで簡単に切り替える（トグルする）ためのツールです。
+Ubuntu 等の systemd 環境において、ノートPCの「蓋を閉じたときのスリープ機能」をCLIで簡単に切り替える（トグルする）ためのツールです。
 
-現在の環境（Ubuntu 24.04.4 LTS / systemd 255）に最適化されており、`/etc/systemd/logind.conf` の `HandleLidSwitch` を安全に書き換え、自動でサービスを再起動して設定を反映させます。
+`systemd-inhibit` コマンドを利用してスリープを一時的にブロックする方式を採用しているため、**管理者権限（sudo）が不要**で、システムの恒久的な設定ファイル（`logind.conf`など）を汚しません。また、切り替え時にデスクトップ通知（`notify-send`）を表示します。
 
 ## 特徴
-- **コマンド一発で切り替え:** 長い設定ファイルを毎回エディタで開く必要はありません。
-- **現在の状態表示:** 現在「蓋を閉じるとスリープする」状態なのか、「何もしない」状態なのかを素早く確認できます。
-- **安全な操作:** `logind.conf` の元の設定を壊さないように、`HandleLidSwitch` 行のみを正確に更新します。
+- **コマンド一発でトグル:** 実行するたびに スリープ有効 ↔ スリープ無効 が切り替わります。
+- **sudo不要:** ユーザー権限のまま実行可能です。
+- **一時的な変更:** システムを再起動するとデフォルト（スリープ有効）に戻るため安全です。
+- **デスクトップ通知:** 状態が切り替わったことをポップアップでわかりやすく通知します。
 
 ## 対象環境
-- Ubuntu 20.04 / 22.04 / 24.04 LTS (確認済み: Ubuntu 24.04.4 LTS)
-- systemd を採用しているLinuxディストリビューション全般
+- Ubuntu / Debian など、`systemd` および `notify-send` が利用可能な Linux デスクトップ環境
 
 ## インストール方法
 
 ```bash
-git clone https://github.com/yourusername/toggle-lid-sleep.git
+git clone https://github.com/edometro/toggle-lid-sleep.git
 cd toggle-lid-sleep
 chmod +x toggle-lid-sleep.sh
-sudo cp toggle-lid-sleep.sh /usr/local/bin/toggle-lid-sleep
+# ユーザーごとの実行パス (例: ~/.local/bin) に配置することをおすすめします
+cp toggle-lid-sleep.sh ~/.local/bin/toggle-lid-sleep
 ```
+※ `~/.local/bin` に PATH が通っていることを確認してください。
 
 ## 使い方
 
-システム設定を変更するため、実行には `sudo` 権限が必要です。
+ターミナルやランチャーから以下のコマンドを実行するだけです。
 
-### 状態の確認
-現在の設定状態を確認します。
 ```bash
-toggle-lid-sleep status
+toggle-lid-sleep
 ```
 
-### スリープを無効にする（蓋を閉じても起動したままにする）
-クラムシェルモードやサーバー用途で、蓋を閉じても動作を続けさせたい場合に使用します。
-```bash
-sudo toggle-lid-sleep off
-```
-
-### スリープを有効にする（デフォルトに戻す）
-蓋を閉じたらスリープするように戻します。
-```bash
-sudo toggle-lid-sleep on
-```
-
-### 状態をトグルする（切り替える）
-現在の状態を読み取り、逆の状態に切り替えます。
-```bash
-sudo toggle-lid-sleep toggle
-```
+実行するたびに、以下の動作を交互に行います：
+1. **スリープ無効化**: 蓋を閉じてもスリープしなくなります（`systemd-inhibit` をバックグラウンドで起動）。
+2. **スリープ有効化**: 蓋を閉じるとスリープする通常の状態に戻ります（バックグラウンドのプロセスを終了）。
 
 ## 仕組み
-このスクリプトは以下のシステム操作を行っています：
-1. `/etc/systemd/logind.conf` の `HandleLidSwitch` パラメータを `ignore` (無効) または `suspend` (有効) に書き換えます。
-2. `sudo systemctl restart systemd-logind` を実行し、変更を即座にシステムに反映させます。
+1. 実行時、`/tmp/toggle-lid-sleep.pid` にプロセスの状態を記録します。
+2. スリープを無効にする際、`systemd-inhibit --what=handle-lid-switch:sleep` をバックグラウンドで実行し、ラップトップがスリープに入るのをブロックします。
+3. 再度実行されると、記録されたPIDをもとにブロックプロセスを終了（kill）し、通常のスリープ挙動に戻します。
 
 ## ライセンス
 MIT License
